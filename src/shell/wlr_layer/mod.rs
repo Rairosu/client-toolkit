@@ -66,10 +66,15 @@ impl LayerShell {
                 layer.into(),
                 namespace.map(Into::into).unwrap_or_default(),
                 qh,
-                LayerSurfaceData { inner: weak.clone() },
+                LayerSurfaceData {
+                    inner: weak.clone(),
+                },
             );
 
-            LayerSurfaceInner { wl_surface: surface, kind: SurfaceKind::Wlr(layer_surface) }
+            LayerSurfaceInner {
+                wl_surface: surface,
+                kind: SurfaceKind::Wlr(layer_surface),
+            }
         });
         drop(freeze);
 
@@ -111,7 +116,10 @@ impl LayerSurface {
     pub fn from_wlr_surface(
         surface: &zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
     ) -> Option<LayerSurface> {
-        surface.data::<LayerSurfaceData>().and_then(|data| data.inner.upgrade()).map(LayerSurface)
+        surface
+            .data::<LayerSurfaceData>()
+            .and_then(|data| data.inner.upgrade())
+            .map(LayerSurface)
     }
 
     pub fn get_popup(&self, popup: &XdgPopup) {
@@ -131,9 +139,9 @@ impl LayerSurface {
     pub fn set_anchor(&self, anchor: Anchor) {
         match self.0.kind {
             // We currently rely on the bitsets being the same
-            SurfaceKind::Wlr(ref wlr) => {
-                wlr.set_anchor(zwlr_layer_surface_v1::Anchor::from_bits_truncate(anchor.bits()))
-            }
+            SurfaceKind::Wlr(ref wlr) => wlr.set_anchor(
+                zwlr_layer_surface_v1::Anchor::from_bits_truncate(anchor.bits()),
+            ),
         }
     }
 
@@ -169,6 +177,24 @@ impl LayerSurface {
 impl WaylandSurface for LayerSurface {
     fn wl_surface(&self) -> &wl_surface::WlSurface {
         self.0.wl_surface.wl_surface()
+    }
+}
+
+#[cfg(feature = "raw-window-handle")]
+impl raw_window_handle::HasWindowHandle for LayerSurface {
+    fn window_handle(
+        &self,
+    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        self.0.wl_surface.window_handle()
+    }
+}
+
+#[cfg(feature = "raw-window-handle")]
+impl raw_window_handle::HasDisplayHandle for LayerSurface {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        self.0.wl_surface.display_handle()
     }
 }
 

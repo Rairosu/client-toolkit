@@ -185,7 +185,11 @@ struct SurfaceDataInner {
 
 impl Default for SurfaceDataInner {
     fn default() -> Self {
-        Self { transform: wl_output::Transform::Normal, outputs: Vec::new(), watcher: None }
+        Self {
+            transform: wl_output::Transform::Normal,
+            outputs: Vec::new(),
+            watcher: None,
+        }
     }
 }
 
@@ -238,6 +242,43 @@ impl From<wl_surface::WlSurface> for Surface {
 impl Drop for Surface {
     fn drop(&mut self) {
         self.0.destroy();
+    }
+}
+
+#[cfg(feature = "raw-window-handle")]
+impl raw_window_handle::HasWindowHandle for Surface {
+    fn window_handle(
+        &self,
+    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        let handle = raw_window_handle::RawWindowHandle::Wayland(
+            raw_window_handle::WaylandWindowHandle::new(
+                core::ptr::NonNull::new(self.wl_surface().id().as_ptr().cast())
+                    .ok_or(raw_window_handle::HandleError::Unavailable)?,
+            ),
+        );
+        Ok(unsafe { raw_window_handle::WindowHandle::borrow_raw(handle) })
+    }
+}
+
+#[cfg(feature = "raw-window-handle")]
+impl raw_window_handle::HasDisplayHandle for Surface {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        let handle = raw_window_handle::RawDisplayHandle::Wayland(
+            raw_window_handle::WaylandDisplayHandle::new(
+                core::ptr::NonNull::new(
+                    self.wl_surface()
+                        .backend()
+                        .upgrade()
+                        .ok_or(raw_window_handle::HandleError::Unavailable)?
+                        .display_ptr()
+                        .cast(),
+                )
+                .ok_or(raw_window_handle::HandleError::Unavailable)?,
+            ),
+        );
+        Ok(unsafe { raw_window_handle::DisplayHandle::borrow_raw(handle) })
     }
 }
 
@@ -408,8 +449,11 @@ impl Region {
         compositor
             .bound_global()
             .map(|c| {
-                c.send_constructor(wl_compositor::Request::CreateRegion {}, Arc::new(RegionData))
-                    .unwrap_or_else(|_| Proxy::inert(c.backend().clone()))
+                c.send_constructor(
+                    wl_compositor::Request::CreateRegion {},
+                    Arc::new(RegionData),
+                )
+                .unwrap_or_else(|_| Proxy::inert(c.backend().clone()))
             })
             .map(Region)
     }
